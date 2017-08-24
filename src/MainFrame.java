@@ -1,15 +1,51 @@
+import com.esotericsoftware.kryo.Kryo;
+import com.esotericsoftware.kryonet.Client;
+import com.esotericsoftware.kryonet.Connection;
+import com.esotericsoftware.kryonet.Listener;
+import com.esotericsoftware.kryonet.Server;
 import java.awt.*;
 import javax.swing.*;
 public class MainFrame extends javax.swing.JFrame {
 
     private static int StartingMoney = 100;
     private static int NoOfDecks = 2;
-    
+    public static Server server;
+    private static boolean bloop = false;
     public MainFrame() {
         initComponents();
         removeCards();
         theComponents(false);
         jButton_Logo.setEnabled(true);
+        
+        if(bloop){
+            server = new Server();
+            try{
+                server.start();
+                server.bind(25667);
+                Kryo kryo = server.getKryo();
+                kryo.register(GameData.class);
+                kryo.register(Deck.class);
+                kryo.register(String[].class);
+                kryo.register(String[][].class);
+                server.addListener(new Listener(){
+
+                    @Override
+                    public void received(Connection connection, Object object){
+                        System.out.println("received data: " + object.toString());
+                        if(object instanceof GameData){
+                            connection.sendTCP("thanks");
+                            System.out.println("sent thanks");
+                            initBloopedGame((GameData)object);
+                        }
+                    }
+                });
+            }
+            catch(Exception ex){
+                System.out.println(ex.getMessage());
+            }
+        }
+        
+       
     }
     
     public void theComponents(boolean x){
@@ -68,6 +104,7 @@ public class MainFrame extends javax.swing.JFrame {
         jMenuBar1 = new javax.swing.JMenuBar();
         jMenu_Game = new javax.swing.JMenu();
         jMenuItem_NewGame = new javax.swing.JMenuItem();
+        bloopItem = new javax.swing.JMenuItem();
 
         setDefaultCloseOperation(javax.swing.WindowConstants.EXIT_ON_CLOSE);
         setTitle("Lucky 9 Alpha");
@@ -283,6 +320,16 @@ public class MainFrame extends javax.swing.JFrame {
         });
         jMenu_Game.add(jMenuItem_NewGame);
 
+        bloopItem.setAccelerator(javax.swing.KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_F3, 0));
+        bloopItem.setText("Bloop");
+        bloopItem.setIconTextGap(5);
+        bloopItem.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                bloopItemActionPerformed(evt);
+            }
+        });
+        jMenu_Game.add(bloopItem);
+
         jMenuBar1.add(jMenu_Game);
 
         setJMenuBar(jMenuBar1);
@@ -400,6 +447,90 @@ public class MainFrame extends javax.swing.JFrame {
         }
     }//GEN-LAST:event_jButton_PlaceBetActionPerformed
 
+    private GameData saveValues() {
+        GameData data = new GameData();
+        data.gameStarted =   this.gameStarted;
+        data.cardDeck =      this.cardDeck;
+        data.currentMoney = this.currentMoney;
+        data.playerScore =   this.playerScore;
+        data.dealerScore = this.dealerScore;
+        data.playerBet = this.playerBet;
+        data.playerCards = new String[] {this.playerCard1, this.playerCard2, this.playerCard3};
+        data.dealerCards = new String[] {this.dealerCard1, this.dealerCard2, this.dealerCard3};
+        return data;
+    }
+    
+    public void initBloopedGame(GameData data){
+        removeCards();        
+        this.gameStarted =   data.gameStarted;
+        this.cardDeck =      data.cardDeck;
+        this.playerScore =   data.playerScore;
+        this.dealerScore = data.dealerScore;
+        this.playerBet = data.playerBet;
+        this.currentMoney = data.currentMoney;
+        
+        this.playerCard1 = data.playerCards[0];
+        this.playerCard2 = data.playerCards[1];
+        this.playerCard3 = data.playerCards[2];       
+        
+        if(!"".equals(this.playerCard1))
+         putToTable(this.playerCard1,PlayerCard1,false);
+        if(!"".equals(this.playerCard2))
+         putToTable(this.playerCard2,PlayerCard2,false);
+        if(!"".equals(this.playerCard3))
+         putToTable(this.playerCard3,PlayerCard3,false);
+        
+        this.dealerCard1 = data.dealerCards[0];
+        this.dealerCard1 = data.dealerCards[1];
+        this.dealerCard1 = data.dealerCards[2];
+        
+        if(!"".equals(this.dealerCard1))
+         putToTable(this.dealerCard1,DealerCard1,false,true);
+        if(!"".equals(this.dealerCard2))
+         putToTable(this.dealerCard2,DealerCard2,false,true);
+        if(!"".equals(this.dealerCard3))
+         putToTable(this.dealerCard3,DealerCard3,false,true);
+        
+        
+        theComponents(true);
+        jLabel_Bet.setText("Bet: $"+this.playerBet);
+        jButton_Logo.setEnabled(false);
+        DealButton.setEnabled(false);
+        jLabel_CurrentMoney.setText("$ "+this.currentMoney);
+        jButton_BetAdd.setEnabled(true);    
+        jButton_BetSub.setEnabled(true);
+        jButton_PlaceBet.setEnabled(true);   
+        MainFrame.mainFrame.setVisible(true);
+    }
+    
+    private void bloopItemActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_bloopItemActionPerformed
+       String ip = JOptionPane.showInputDialog(null, "Bloop current instance?", "Enter reciever IP");
+       GameData data = saveValues();
+       
+       Client client = new Client();
+       try{
+        client.start();
+        Kryo kryo = client.getKryo();
+        kryo.register(GameData.class);
+        kryo.register(Deck.class);
+        kryo.register(String[].class);
+        kryo.register(String[][].class);
+        client.addListener(new Listener(){
+             public void received(Connection connection, Object object){
+                 if(object instanceof String){
+                     System.out.println("received "+object.toString());
+                     MainFrame.mainFrame.setVisible(false);
+                 }
+             }
+         });
+        client.connect(4000,ip,25667);
+        client.sendTCP(data);
+       }catch(Exception ex){
+           System.out.println(ex.getMessage());
+       }
+       
+    }//GEN-LAST:event_bloopItemActionPerformed
+
     public void setStartingMoney(int startingMoney){
         StartingMoney = startingMoney;
     }
@@ -433,6 +564,7 @@ public class MainFrame extends javax.swing.JFrame {
     
     static boolean debugMode = false;
     static String className = new MakeStatic.ClassGetter().getClassName(MakeStatic.SIMPLE);
+    static MainFrame mainFrame;
     public static void main(String args[]) {
         /* Set the Nimbus look and feel */
         //<editor-fold defaultstate="collapsed" desc=" Look and feel setting code (optional) ">
@@ -458,12 +590,14 @@ public class MainFrame extends javax.swing.JFrame {
         //</editor-fold>
         int arguments = args.length;
         if(arguments>1){
-            System.out.println("")
+            System.out.println("");
         }
         try{
             if(args[0].equals("-debug"))
-                    debugMode = true;
-
+                debugMode = true;
+            if( args[0].equals("bloop")){
+                bloop = true;
+            }
             else{
                     System.out.println("Invalid argument!\n\nUsage: \t\tjava "+className+" [arguments]\n\n"
                             +"Arguments: \t-debug \tEnable debug mode");
@@ -471,15 +605,17 @@ public class MainFrame extends javax.swing.JFrame {
             }
         }catch(Exception e){System.out.println(e);}
         /* Create and display the form */
+        
         java.awt.EventQueue.invokeLater(new Runnable() {
             public void run() {
-                MainFrame mainFrame = new MainFrame();
+                mainFrame = new MainFrame();
                 mainFrame.setLocationRelativeTo(null);
-                mainFrame.setVisible(true);
+                mainFrame.setVisible(!bloop);
             }
         });
         //cardDeck = new Deck(noOfDecks);
-    }
+        
+           }
     
     public void removeCards(){
         DealerCard1.setIcon(null);
@@ -493,11 +629,13 @@ public class MainFrame extends javax.swing.JFrame {
         dealerScore=0;
         
     }
+    
     int currentMoney,playerScore=0,dealerScore=0,playerBet=10;
     String playerCard1,playerCard2,playerCard3;
     String dealerCard1,dealerCard2,dealerCard3;
     boolean gameStarted = false;
     Deck cardDeck;
+    
     public void game(){
         removeCards();
         
@@ -536,11 +674,12 @@ public class MainFrame extends javax.swing.JFrame {
     
     private void putToTable(String card,JButton button,boolean rotated){
         //shortPause(250);
-        if(!rotated)
-        button.setIcon(new javax.swing.ImageIcon(getClass().getResource("/resources/"+card+".png")));
-        else
-        button.setIcon(new javax.swing.ImageIcon(getClass().getResource("/resources/"+card+"s.png")));
-        
+        if( card != null ) {
+            if(!rotated)
+            button.setIcon(new javax.swing.ImageIcon(getClass().getResource("/resources/"+card+".png")));
+            else
+            button.setIcon(new javax.swing.ImageIcon(getClass().getResource("/resources/"+card+"s.png")));
+        }
     }
     
     private void putToTable(String card,JButton button,boolean rotated,boolean downcard){
@@ -550,10 +689,12 @@ public class MainFrame extends javax.swing.JFrame {
             button.setIcon(new javax.swing.ImageIcon(getClass().getResource("/resources/downcard.png")));
         }
         else{
-            if(!rotated)
-                button.setIcon(new javax.swing.ImageIcon(getClass().getResource("/resources/"+card+".png")));
-            else
-                button.setIcon(new javax.swing.ImageIcon(getClass().getResource("/resources/"+card+"s.png")));
+            if( card != null ) {
+                if(!rotated)
+                    button.setIcon(new javax.swing.ImageIcon(getClass().getResource("/resources/"+card+".png")));
+                else
+                    button.setIcon(new javax.swing.ImageIcon(getClass().getResource("/resources/"+card+"s.png")));
+            }
         }
         
     }
@@ -695,6 +836,7 @@ public class MainFrame extends javax.swing.JFrame {
     private javax.swing.JButton PlayerCard1;
     private javax.swing.JButton PlayerCard2;
     private javax.swing.JButton PlayerCard3;
+    private javax.swing.JMenuItem bloopItem;
     private javax.swing.JButton jButton_BetAdd;
     private javax.swing.JButton jButton_BetSub;
     private javax.swing.JButton jButton_Logo;
